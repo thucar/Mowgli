@@ -121,6 +121,43 @@ __STATIC_INLINE void drivemotor_prepareMsg(uint8_t left_speed, uint8_t right_spe
 /// @param
 void DRIVEMOTOR_Init(void)
 {
+#ifdef USE_L298N_DRIVER
+    // Initialize GPIO for L298N motor driver
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    // Enable GPIO Clocks
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+
+    // Configure GPIO for L298N In and En pins
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+
+    // Right motor In1=PD4, In2=PB8, EnA=PE2
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+    GPIO_InitStruct.Pin = GPIO_PIN_8;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    GPIO_InitStruct.Pin = GPIO_PIN_2;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    // Left motor In1=PE4, In2=PB9, EnA=PE3
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    GPIO_InitStruct.Pin = GPIO_PIN_3;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    // Set all control pins to low initially
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_RESET);
+
+    debug_printf(" * L298N Motor Driver initialized\r\n");
+#else
     PAC5210RESET_GPIO_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct;
     GPIO_InitStruct.Pin = PAC5210RESET_PIN;
@@ -216,6 +253,7 @@ void DRIVEMOTOR_Init(void)
     prev_left_encoder_val = 0;
     prev_right_wheel_speed_val = 0;
     prev_left_wheel_speed_val = 0;
+#endif
 }
 
 /// @brief handle drive motor messages
@@ -416,10 +454,31 @@ void DRIVEMOTOR_App_Rx(void)
 /// @param right_dir  left motor direction bit
 void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir)
 {
+#ifdef USE_L298N_DRIVER
+    // Control the motors using the L298N driver
+
+    // Right motor: EN = PE2, IN1 = PD4, IN2 = PB8
+    // Left motor: EN = PE3, IN1 = PE4, IN2 = PB9
+
+    // Set the direction of the right motor
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, right_dir);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, !right_dir);
+
+    // Set the speed of the right motor
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, right_speed);
+
+    // Set the direction of the left motor
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_4, left_dir);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, !left_dir);
+
+    // Set the speed of the left motor
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, left_speed);
+#else
     left_speed_req = left_speed;
     right_speed_req = right_speed;
     left_dir_req = left_dir;
     right_dir_req = right_dir;
+#endif
 }
 
 /// @brief drive motor receive interrupt handler
